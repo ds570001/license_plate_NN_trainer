@@ -76,8 +76,8 @@ for plate in image_names:
     Y_dataset = np.vstack((Y_dataset, plate_encoding))
 
 #OVERALL PLATE DIMENSIONS CONSTANTS
-RESIZE_WIDTH = 200 #must be multiple of 4
-RESIZE_HEIGHT = 70
+RESIZE_WIDTH = 400 #must be multiple of 4
+RESIZE_HEIGHT = 150
 
 resize_width = RESIZE_WIDTH
 resize_height = RESIZE_HEIGHT

@@ -40,12 +40,6 @@ for i in range(0, NUMBER_OF_PLATES):
 
     height, width, channels = blank_plate.shape
 
-    if first_plate:
-      X_dataset = blank_plate.reshape(1,height,width,channels)
-      first_plate = False
-    else:
-      X_dataset = np.vstack((X_dataset,blank_plate.reshape(1,height,width,channels)))
-
     #Write license plate to file
     cv2.imwrite(os.path.join("./training_data/", 
                              "plate_{}{}.png".format(plate_alpha, plate_num)),

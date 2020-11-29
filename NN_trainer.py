@@ -32,10 +32,15 @@ import seaborn as sn
 import pandas as pd
 
 PATH = "./training_data"
+PATH_sim = "./sim_training_data"
 folder0 = PATH
+folder_sim = PATH_sim
 
 files0 = [f for f in listdir(PATH) if isfile(join(PATH, f))]
+files_sim = [f for f in listdir(PATH_sim) if isfile(join(PATH_sim, f))]
+print(files_sim)
 random.shuffle(files0)
+random.shuffle(files_sim)
 
 #GET IMAGES FROM FOLDER
 imgset0 = np.array([np.array(Image.open(folder0 + "/" + file))
@@ -43,8 +48,8 @@ imgset0 = np.array([np.array(Image.open(folder0 + "/" + file))
 print("Loaded {:} images from folder:\n{}".format(imgset0.shape[0], folder0))
 
 #OVERALL PLATE DIMENSIONS CONSTANTS
-RESIZE_WIDTH = 200 #must be multiple of 4
-RESIZE_HEIGHT = 70
+RESIZE_WIDTH = 400 #must be multiple of 4
+RESIZE_HEIGHT = 150
 
 resize_width = RESIZE_WIDTH
 resize_height = RESIZE_HEIGHT
@@ -91,12 +96,31 @@ def split_images(imgset0,training_flag):
 
 X_dataset = split_images(imgset0,training_flag=True)
 
+#GET SIM IMAGES
+first_sim_image = True
+for i in range(len(files_sim)):
+	sim_img = np.array(Image.open(folder_sim + "/" + files_sim[i]))
+	sim_img = sim_img.reshape(1,sim_img.shape[0],sim_img.shape[1],3)
+	split_sim_img = split_images(sim_img,training_flag=False)
+	if first_sim_image:
+		X_dataset_sim = split_sim_img
+		first_sim_image = False
+	else:
+		X_dataset_sim = np.vstack((X_dataset_sim,split_sim_img))
+print("Loaded {:} images from folder:\n{}".format(X_dataset_sim.shape[0], folder_sim))
+
+
 # Parse the Image Titles
-image_names = []
-for title in files0:
-  title = title.replace("plate_", "").replace(".png", "")
-  image_names.append(title)
-print(image_names)
+def parse_image_titles(files):
+	image_names_set = []
+	for title in files:
+		title = title.replace("plate_", "").replace(".png", "")
+		image_names_set.append(title)
+	#print(image_names_set)
+	return image_names_set
+
+image_names = parse_image_titles(files0)
+image_names_sim = parse_image_titles(files_sim)
 
 '''cv.imshow(image_names[0],X_dataset[0])
 cv.imshow(image_names[1],X_dataset[4])
@@ -141,15 +165,20 @@ X_dataset = X_dataset_orig/255.
 # Convert Y dataset to one-hot encoding
 Y_dataset = convert_to_one_hot(Y_dataset_orig, NUMBER_OF_LABELS).T
 '''
+def get_Y_dataset(image_names_set):
+	global classes
+	first_run = True
+	for plate in image_names_set:
+		plate_encoding = convert_to_one_hot(plate, classes)
+		if first_run:
+			Y_data = plate_encoding
+			first_run = False
+		else:
+			Y_data = np.vstack((Y_data, plate_encoding))
+	return Y_data
 
-first_run = True
-for plate in image_names:
-  plate_encoding = convert_to_one_hot(plate, classes)
-  if first_run:
-    Y_dataset = plate_encoding
-    first_run = False
-  else:
-    Y_dataset = np.vstack((Y_dataset, plate_encoding))
+Y_dataset = get_Y_dataset(image_names)
+Y_dataset_sim = get_Y_dataset(image_names_sim)
 
 # Display images in the training data set. 
 def displayImage(letter):
@@ -184,7 +213,7 @@ def displayImage(letter):
 
 
 #AUGMENT THE DATA
-IDG_object = ImageDataGenerator(brightness_range=[0.35,1.0],rotation_range=1.5,
+IDG_object = ImageDataGenerator(brightness_range=[0.25,1.0],rotation_range=1.5,
                                 shear_range=2.0)
 xy_iterator = IDG_object.flow(x=(X_dataset,Y_dataset),shuffle=False,batch_size=1)
 #displayImage(4)
@@ -201,6 +230,14 @@ cv.waitKey(3000)
 cv.destroyAllWindows()
 print(Y_dataset[0])
 print(Y_dataset[1])'''
+
+def combine_datasets(X_data0, X_data1, Y_data0, Y_data1):
+	X_dataset_comb = np.vstack((X_data0,X_data1))
+	Y_dataset_comb = np.vstack((Y_data0,Y_data1))
+
+	return X_dataset_comb, Y_dataset_comb
+
+X_dataset, Y_dataset = combine_datasets(X_dataset_sim,X_dataset,Y_dataset_sim,Y_dataset)
 
 VALIDATION_SPLIT = 0.2
 
@@ -372,6 +409,5 @@ cv.destroyAllWindows()
 
 print(X_dataset.shape)
 print(img.shape)
-
-models.save_model(conv_model,"NN_object")
 '''
+models.save_model(conv_model,"NN_object")
