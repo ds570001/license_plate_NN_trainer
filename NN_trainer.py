@@ -9,6 +9,7 @@ from collections import Counter
 from matplotlib import pyplot as plt
 from PIL import Image
 from keras.preprocessing.image import ImageDataGenerator
+import tensorflow as tf
 
 from os import listdir
 from os.path import isfile, join
@@ -31,16 +32,22 @@ import sys
 import seaborn as sn
 import pandas as pd
 
+include_sim_plates = False
+
 PATH = "./training_data"
-PATH_sim = "./sim_training_data"
 folder0 = PATH
-folder_sim = PATH_sim
+if include_sim_plates:
+	PATH_sim = "./sim_training_data"
+	folder_sim = PATH_sim
 
 files0 = [f for f in listdir(PATH) if isfile(join(PATH, f))]
-files_sim = [f for f in listdir(PATH_sim) if isfile(join(PATH_sim, f))]
-print(files_sim)
+if include_sim_plates:
+	files_sim = [f for f in listdir(PATH_sim) if isfile(join(PATH_sim, f))]
+#print(files_sim)
 random.shuffle(files0)
-random.shuffle(files_sim)
+
+if include_sim_plates:
+	random.shuffle(files_sim)
 
 #GET IMAGES FROM FOLDER
 imgset0 = np.array([np.array(Image.open(folder0 + "/" + file))
@@ -95,19 +102,48 @@ def split_images(imgset0,training_flag):
   return X_dataset
 
 X_dataset = split_images(imgset0,training_flag=True)
+'''
+def crop_images(data):
+	original_size = [resize_height,int(split)]
+	crop_size = [resize_height-20, int(split)-20, 3]
+	first_crop = True
+	for i in range(len(data)):
+		seed = np.random.randint(20)
+		cropped = tf.image.random_crop(data[i], size = crop_size)
+		print(cropped)
+		cropped = tf.image.resize(cropped, size = original_size)
+		cropped = np.array(cropped)
+		print(cropped)
+		if first_crop:
+			ret_data = cropped
+		else:
+			ret_data = np.vstack((ret_data,cropped))
+	return ret_data
 
-#GET SIM IMAGES
-first_sim_image = True
-for i in range(len(files_sim)):
-	sim_img = np.array(Image.open(folder_sim + "/" + files_sim[i]))
-	sim_img = sim_img.reshape(1,sim_img.shape[0],sim_img.shape[1],3)
-	split_sim_img = split_images(sim_img,training_flag=False)
-	if first_sim_image:
-		X_dataset_sim = split_sim_img
-		first_sim_image = False
-	else:
-		X_dataset_sim = np.vstack((X_dataset_sim,split_sim_img))
-print("Loaded {:} images from folder:\n{}".format(X_dataset_sim.shape[0], folder_sim))
+X_dataset = crop_images(X_dataset)
+'''
+
+def shift_images(data):
+	for i in range(len(data)):
+		shift = tf.keras.preprocessing.image.random_shift(data[i],0.2,0.2,row_axis=0,col_axis=1,channel_axis=2,fill_mode='nearest')
+		data[i] = shift
+	return data
+
+X_dataset = shift_images(X_dataset)
+
+if include_sim_plates:
+	#GET SIM IMAGES
+	first_sim_image = True
+	for i in range(len(files_sim)):
+		sim_img = np.array(Image.open(folder_sim + "/" + files_sim[i]))
+		sim_img = sim_img.reshape(1,sim_img.shape[0],sim_img.shape[1],3)
+		split_sim_img = split_images(sim_img,training_flag=False)
+		if first_sim_image:
+			X_dataset_sim = split_sim_img
+			first_sim_image = False
+		else:
+			X_dataset_sim = np.vstack((X_dataset_sim,split_sim_img))
+	print("Loaded {:} images from folder:\n{}".format(X_dataset_sim.shape[0], folder_sim))
 
 
 # Parse the Image Titles
@@ -120,7 +156,8 @@ def parse_image_titles(files):
 	return image_names_set
 
 image_names = parse_image_titles(files0)
-image_names_sim = parse_image_titles(files_sim)
+if include_sim_plates:
+	image_names_sim = parse_image_titles(files_sim)
 
 '''cv.imshow(image_names[0],X_dataset[0])
 cv.imshow(image_names[1],X_dataset[4])
@@ -178,7 +215,8 @@ def get_Y_dataset(image_names_set):
 	return Y_data
 
 Y_dataset = get_Y_dataset(image_names)
-Y_dataset_sim = get_Y_dataset(image_names_sim)
+if include_sim_plates:
+	Y_dataset_sim = get_Y_dataset(image_names_sim)
 
 # Display images in the training data set. 
 def displayImage(letter):
@@ -237,7 +275,8 @@ def combine_datasets(X_data0, X_data1, Y_data0, Y_data1):
 
 	return X_dataset_comb, Y_dataset_comb
 
-X_dataset, Y_dataset = combine_datasets(X_dataset_sim,X_dataset,Y_dataset_sim,Y_dataset)
+if include_sim_plates:
+	X_dataset, Y_dataset = combine_datasets(X_dataset_sim,X_dataset,Y_dataset_sim,Y_dataset)
 
 VALIDATION_SPLIT = 0.2
 
@@ -366,7 +405,8 @@ print(len(X_dataset))
 print(y_true)
 print(y_pred)
 print("Confusion Matrix:\n")
-confusion_matrix = confusion_matrix(y_true,y_pred)
+#from https://stackoverflow.com/questions/35572000/how-can-i-plot-a-confusion-matrix
+confusion_matrix = confusion_matrix(y_true,y_pred,labels=classes)
 df_cm = pd.DataFrame(confusion_matrix, index = [i for i in classes],
                   columns = [i for i in classes])
 plt.figure(figsize = (10,7))

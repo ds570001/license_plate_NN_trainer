@@ -144,8 +144,8 @@ def mapPredictionToCharacter(y_predict):
     return character[0]
 
 def testNN(files):
-    y_pred = []
-    y_true = []
+    y_pred = np.array([])
+    y_true = np.array([])
     for i in range(len(files)):
         img = np.array(Image.open(folder_testing + "/" + files[i]))
         img = img.reshape(1,img.shape[0],img.shape[1],3)
@@ -170,7 +170,12 @@ def testNN(files):
     return y_true, y_pred
 
 y_true, y_pred = testNN(files_testing)
-confusion_matrix = confusion_matrix(y_true,y_pred)
+np.set_printoptions(threshold=sys.maxsize)
+print(y_true)
+print(y_pred)
+#from https://stackoverflow.com/questions/35572000/how-can-i-plot-a-confusion-matrix
+confusion_matrix = confusion_matrix(y_true,y_pred,labels=classes)
+print(confusion_matrix)
 df_cm = pd.DataFrame(confusion_matrix, index = [i for i in classes],
                   columns = [i for i in classes])
 plt.figure(figsize = (10,7))
