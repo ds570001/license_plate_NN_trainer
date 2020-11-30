@@ -55,14 +55,14 @@ imgset0 = np.array([np.array(Image.open(folder0 + "/" + file))
 print("Loaded {:} images from folder:\n{}".format(imgset0.shape[0], folder0))
 
 #OVERALL PLATE DIMENSIONS CONSTANTS
-RESIZE_WIDTH = 400 #must be multiple of 4
-RESIZE_HEIGHT = 150
+RESIZE_WIDTH = 320 #must be multiple of 4
+RESIZE_HEIGHT = 120
 
 resize_width = RESIZE_WIDTH
 resize_height = RESIZE_HEIGHT
 split = RESIZE_WIDTH/4
 
-INITIAL_RESIZE_WIDTH = 75
+INITIAL_RESIZE_WIDTH = 50
 INITIAL_RESIZE_HEIGHT = 25
 
 def split_images(imgset0,training_flag):
@@ -74,19 +74,41 @@ def split_images(imgset0,training_flag):
   split = resize_width / 4
   #plate = imgset0[0]
 
+  #from https://www.geeksforgeeks.org/opencv-motion-blur-in-python/
+  
+  kernel_size = 15
+  kernel_v = np.zeros((kernel_size, kernel_size))
+  kernel_h = np.copy(kernel_v)
+  kernel_v[:, int((kernel_size - 1)/2)] = np.ones(kernel_size) 
+  kernel_h[int((kernel_size - 1)/2), :] = np.ones(kernel_size)
+  kernel_v /= kernel_size
+  kernel_h /= kernel_size
+
   #put all the letters in one big array
   #put that plate array into a bigger array
   first_plate = True
   for plate in imgset0:
+    if first_plate:
+	  cv.imshow("first",plate)
+	  cv.waitKey(5000)
+	  cv.destroyAllWindows()
     #Resize images
     #Found this function from https://www.tutorialkart.com/opencv/python/opencv-python-resize-image/
     cutoff_margin = random.randint(10,30)
     if training_flag:
-        plate = plate[cutoff_margin:(plate.shape[0]-cutoff_margin),:]
-        blur = cv.GaussianBlur(plate,(31,31),0)
-        plate = cv.resize(blur, (INITIAL_RESIZE_WIDTH, INITIAL_RESIZE_HEIGHT))
+        #plate = plate[cutoff_margin:(plate.shape[0]-cutoff_margin),:]
+        #plate = cv.GaussianBlur(plate,(31,31),0)
+        # from https://www.geeksforgeeks.org/opencv-motion-blur-in-python/
+        plate = cv.filter2D(plate, -1, kernel_v)
+        plate = cv.filter2D(plate,-1,kernel_h)
+        plate = cv.resize(plate, (INITIAL_RESIZE_WIDTH, INITIAL_RESIZE_HEIGHT))
     resized_plate = cv.resize(plate, (resize_width, resize_height))
+    if first_plate:
+      cv.imshow("resized", resized_plate)
+      cv.waitKey(5000)
+      cv.destroyAllWindows()
     resized_plate = cv.cvtColor(resized_plate,cv.COLOR_BGR2RGB) #convert image colour back to what it usually is.
+    #resized_plate = plate
     LL = resized_plate[:, 0:int(split)]
     LC = resized_plate[:, int(split):int(split*2)]
     RC = resized_plate[:, int(split*2):int(split*3)]
@@ -102,6 +124,7 @@ def split_images(imgset0,training_flag):
   return X_dataset
 
 X_dataset = split_images(imgset0,training_flag=True)
+
 '''
 def crop_images(data):
 	original_size = [resize_height,int(split)]
@@ -123,13 +146,13 @@ def crop_images(data):
 X_dataset = crop_images(X_dataset)
 '''
 
-def shift_images(data):
+'''def shift_images(data):
 	for i in range(len(data)):
-		shift = tf.keras.preprocessing.image.random_shift(data[i],0.2,0.2,row_axis=0,col_axis=1,channel_axis=2,fill_mode='nearest')
+		shift = tf.keras.preprocessing.image.random_shift(data[i],0.1,0.1,row_axis=0,col_axis=1,channel_axis=2,fill_mode='nearest')
 		data[i] = shift
-	return data
+	return data'''
 
-X_dataset = shift_images(X_dataset)
+#X_dataset = shift_images(X_dataset)
 
 if include_sim_plates:
 	#GET SIM IMAGES
@@ -324,12 +347,6 @@ conv_model.compile(loss='categorical_crossentropy',
                    metrics=['acc'])
 
 np.set_printoptions(threshold=sys.maxsize)
-'''cv.imshow("first",X_dataset[-1])
-cv.imshow("second",X_dataset[-2])
-cv.waitKey(5000)
-cv.destroyAllWindows()
-print("first", Y_dataset[-1])
-print("second", Y_dataset[-2])'''
 
 history_conv = conv_model.fit(X_dataset, Y_dataset, 
                               validation_split=VALIDATION_SPLIT, 
@@ -402,6 +419,7 @@ print(len(X_dataset))
 #print("Validation Accuracy out of 1 ", 1-val_count/float(VALIDATION_SPLIT*len(X_dataset)))
 #print("length y_true", len(y_true))
 #print("length y_pred", len(y_pred))
+'''
 print(y_true)
 print(y_pred)
 print("Confusion Matrix:\n")
@@ -411,7 +429,7 @@ df_cm = pd.DataFrame(confusion_matrix, index = [i for i in classes],
                   columns = [i for i in classes])
 plt.figure(figsize = (10,7))
 sn.heatmap(df_cm, annot=True)
-plt.show()
+plt.show()'''
 
 
 '''
