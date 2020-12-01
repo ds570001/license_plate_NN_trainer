@@ -101,11 +101,6 @@ def split_images(imgset0,training_flag):
   for plate in imgset0:
     #Resize images
     #Found this function from https://www.tutorialkart.com/opencv/python/opencv-python-resize-image/
-    cutoff_margin = random.randint(10,30)
-    if training_flag:
-        plate = plate[cutoff_margin:(plate.shape[0]-cutoff_margin),:]
-        blur = cv.GaussianBlur(plate,(31,31),0)
-        plate = cv.resize(blur, (INITIAL_RESIZE_WIDTH, INITIAL_RESIZE_HEIGHT))
     resized_plate = cv.resize(plate, (resize_width, resize_height))
     resized_plate = cv.cvtColor(resized_plate,cv.COLOR_BGR2RGB) #convert image colour back to what it usually is.
     LL = resized_plate[:, 0:int(split)]
@@ -143,18 +138,35 @@ def mapPredictionToCharacter(y_predict):
     character = classes[index_predicted]
     return character[0]
 
+def grey_images(dataset):
+    dataset_grey = []
+    first_run = True
+    for i in range(len(dataset)):
+        grey = cv.cvtColor(dataset[i], cv.COLOR_BGR2GRAY)
+        #th, im_th = cv.threshold(grey, 128, 255, cv.THRESH_BINARY)
+        if first_run:
+            dataset_grey = grey.reshape(1,grey.shape[0],grey.shape[1])
+            first_run = False
+        else:
+            dataset_grey = np.vstack((dataset_grey,grey.reshape(1,grey.shape[0],grey.shape[1])))
+    return dataset_grey
+
 def testNN(files):
     y_pred = np.array([])
     y_true = np.array([])
+    corr_count = 0
+    tot_count = 0
     for i in range(len(files)):
         img = np.array(Image.open(folder_testing + "/" + files[i]))
         img = img.reshape(1,img.shape[0],img.shape[1],3)
         testing_set = split_images(img,training_flag=False)
         for j in range(len(testing_set)):
-            '''cv.imshow("current_specimen",testing_set[j])
-            cv.waitKey(2000)
-            cv.destroyAllWindows()'''
-            img_aug = np.expand_dims(testing_set[j], axis=0)
+            grey = cv.cvtColor(testing_set[j], cv.COLOR_BGR2GRAY).reshape(testing_set[j].shape[0],testing_set[j].shape[1],1)
+            #cv.imshow("current_specimen",grey)
+            #cv.waitKey(1500)
+            #cv.destroyAllWindows()
+            img_aug = np.expand_dims(grey, axis=0)
+            #img_aug = np.expand_dims(testing_set[j], axis=0)
             y_predict = conv_model.predict(img_aug)[0]
 
             predicted_character = mapPredictionToCharacter(y_predict)
@@ -167,15 +179,22 @@ def testNN(files):
             print("actual: ", true_character)
             print("\n")
 
+            if predicted_character == true_character:
+                corr_count+=1
+            tot_count+=1
+
+    print("num correct:", corr_count)
+    print("num total:", tot_count)
+
     return y_true, y_pred
 
 y_true, y_pred = testNN(files_testing)
 np.set_printoptions(threshold=sys.maxsize)
-print(y_true)
-print(y_pred)
+'''print(y_true)
+print(y_pred)'''
 #from https://stackoverflow.com/questions/35572000/how-can-i-plot-a-confusion-matrix
 confusion_matrix = confusion_matrix(y_true,y_pred,labels=classes)
-print(confusion_matrix)
+#print(confusion_matrix)
 df_cm = pd.DataFrame(confusion_matrix, index = [i for i in classes],
                   columns = [i for i in classes])
 plt.figure(figsize = (10,7))

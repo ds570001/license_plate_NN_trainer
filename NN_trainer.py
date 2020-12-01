@@ -63,7 +63,7 @@ resize_height = RESIZE_HEIGHT
 split = RESIZE_WIDTH/4
 
 INITIAL_RESIZE_WIDTH = 50
-INITIAL_RESIZE_HEIGHT = 25
+INITIAL_RESIZE_HEIGHT = 70
 
 def split_images(imgset0,training_flag):
 
@@ -88,25 +88,21 @@ def split_images(imgset0,training_flag):
   #put that plate array into a bigger array
   first_plate = True
   for plate in imgset0:
-    if first_plate:
-	  cv.imshow("first",plate)
-	  cv.waitKey(5000)
-	  cv.destroyAllWindows()
+    img_width = plate.shape[1]
+    img_height = plate.shape[0]
     #Resize images
     #Found this function from https://www.tutorialkart.com/opencv/python/opencv-python-resize-image/
     cutoff_margin = random.randint(10,30)
     if training_flag:
         #plate = plate[cutoff_margin:(plate.shape[0]-cutoff_margin),:]
-        #plate = cv.GaussianBlur(plate,(31,31),0)
+        plate = cv.GaussianBlur(plate,(31,31),0)
         # from https://www.geeksforgeeks.org/opencv-motion-blur-in-python/
-        plate = cv.filter2D(plate, -1, kernel_v)
-        plate = cv.filter2D(plate,-1,kernel_h)
+        #plate = cv.filter2D(plate, -1, kernel_v)
+        #plate = cv.filter2D(plate,-1,kernel_h)
         plate = cv.resize(plate, (INITIAL_RESIZE_WIDTH, INITIAL_RESIZE_HEIGHT))
+        plate = cv.resize(plate, (img_width, img_height))
     resized_plate = cv.resize(plate, (resize_width, resize_height))
-    if first_plate:
-      cv.imshow("resized", resized_plate)
-      cv.waitKey(5000)
-      cv.destroyAllWindows()
+    #resized_plate = cv.GaussianBlur(resized_plate,(11,11),0)
     resized_plate = cv.cvtColor(resized_plate,cv.COLOR_BGR2RGB) #convert image colour back to what it usually is.
     #resized_plate = plate
     LL = resized_plate[:, 0:int(split)]
@@ -146,13 +142,13 @@ def crop_images(data):
 X_dataset = crop_images(X_dataset)
 '''
 
-'''def shift_images(data):
+def shift_images(data):
 	for i in range(len(data)):
-		shift = tf.keras.preprocessing.image.random_shift(data[i],0.1,0.1,row_axis=0,col_axis=1,channel_axis=2,fill_mode='nearest')
+		shift = tf.keras.preprocessing.image.random_shift(data[i],0.05,0.20,row_axis=0,col_axis=1,channel_axis=2,fill_mode='nearest')
 		data[i] = shift
-	return data'''
+	return data
 
-#X_dataset = shift_images(X_dataset)
+X_dataset = shift_images(X_dataset)
 
 if include_sim_plates:
 	#GET SIM IMAGES
@@ -225,6 +221,9 @@ X_dataset = X_dataset_orig/255.
 # Convert Y dataset to one-hot encoding
 Y_dataset = convert_to_one_hot(Y_dataset_orig, NUMBER_OF_LABELS).T
 '''
+
+#print(convert_to_one_hot("M",classes))
+
 def get_Y_dataset(image_names_set):
 	global classes
 	first_run = True
@@ -272,10 +271,9 @@ def displayImage(letter):
   X_dataset[i] = blur
 '''
 
-
 #AUGMENT THE DATA
-IDG_object = ImageDataGenerator(brightness_range=[0.25,1.0],rotation_range=1.5,
-                                shear_range=2.0)
+IDG_object = ImageDataGenerator(brightness_range=[0.20,1.0],rotation_range=1.5,
+                                shear_range=2.0,zoom_range=[0.80,1.1])
 xy_iterator = IDG_object.flow(x=(X_dataset,Y_dataset),shuffle=False,batch_size=1)
 #displayImage(4)
 
@@ -284,13 +282,33 @@ for i in range(len(X_dataset)):
   X_dataset[i] = xy[0][0]
   Y_dataset[i] = xy[1][0]
 
+def grey_images(dataset):
+	dataset_grey = []
+	first_run = True
+	for i in range(len(dataset)):
+		grey = cv.cvtColor(dataset[i], cv.COLOR_BGR2GRAY)
+		#th, im_th = cv.threshold(grey, 128, 255, cv.THRESH_BINARY)
+		if first_run:
+			dataset_grey = grey.reshape(1,grey.shape[0],grey.shape[1],1)
+			first_run = False
+		else:
+			dataset_grey = np.vstack((dataset_grey,grey.reshape(1,grey.shape[0],grey.shape[1],1)))
+	return dataset_grey
+
+X_dataset = grey_images(X_dataset)
+
 
 '''cv.imshow("first",X_dataset[0])
 cv.imshow("second",X_dataset[1])
-cv.waitKey(3000)
+cv.waitKey(5000)
 cv.destroyAllWindows()
 print(Y_dataset[0])
 print(Y_dataset[1])'''
+
+'''for x in X_dataset:
+	cv.imshow("pic",x)
+	cv.waitKey(3000)
+	cv.destroyAllWindows()'''
 
 def combine_datasets(X_data0, X_data1, Y_data0, Y_data1):
 	X_dataset_comb = np.vstack((X_data0,X_data1))
@@ -329,8 +347,10 @@ def reset_weights(model):
 #Model Definition
 
 conv_model = models.Sequential()
+#conv_model.add(layers.Conv2D(32, (2, 2), activation='relu',
+#                             input_shape=(resize_height, int(split), 3)))
 conv_model.add(layers.Conv2D(32, (2, 2), activation='relu',
-                             input_shape=(resize_height, int(split), 3)))
+                             input_shape=(resize_height, int(split),1)))
 conv_model.add(layers.MaxPooling2D((5, 5)))
 conv_model.add(layers.Conv2D(12, (2, 2), activation='relu'))
 conv_model.add(layers.MaxPooling2D((2, 2)))
@@ -388,40 +408,38 @@ def checkImage(letter):
   print("Confusion Matrix: ")
   print("\n")
 
+def mapPredictionToCharacter(y_predict):
+    #maps NN predictions to the numbers based on the max probability.
+    y_predicted_max = np.max(y_predict)
+    index_predicted = np.where(y_predict == y_predicted_max)
+    character = classes[index_predicted]
+    return character[0]
+
 def testAllImages():
   total_count = 0
   train_count = 0
   val_count = 0
   y_true = []
   y_pred = []
-  for image in range(len(X_dataset)):
-    img = X_dataset[image]
+  for i in range(len(X_dataset)):
+    img = X_dataset[i]
     img_aug = np.expand_dims(img, axis=0)
     y_predict = conv_model.predict(img_aug)[0]
-    index_encoding = np.where(Y_dataset[image] == 1)
-    if y_predict[index_encoding[0][0]] < 0.90:
-      total_count+=1
-      if image < (1-0.2)*len(X_dataset):
-        train_count+=1
-      else:
-        val_count+=1
+    predicted_character = mapPredictionToCharacter(y_predict)
+    y_pred = np.append(y_pred,predicted_character)
 
-    y_predicted_max = np.max(y_predict)
-    index_predicted = np.where(y_predict == y_predicted_max)
-    y_pred.append(index_predicted[0][0])
-    y_true.append(index_encoding[0][0])
+    true_character = classes[np.argmax(Y_dataset[i])]
+    y_true = np.append(y_true,true_character)
+
   return total_count, train_count, val_count, y_pred, y_true
 
 total_count, train_count, val_count, y_pred, y_true = testAllImages()
-print(len(X_dataset))
 #print("Total Accuracy out of 1: ", 1-total_count/float(len(X_dataset)))
 #print("Train Accuracy out of 1: ", 1-train_count/((1-VALIDATION_SPLIT)*len(X_dataset)))
 #print("Validation Accuracy out of 1 ", 1-val_count/float(VALIDATION_SPLIT*len(X_dataset)))
 #print("length y_true", len(y_true))
 #print("length y_pred", len(y_pred))
-'''
-print(y_true)
-print(y_pred)
+
 print("Confusion Matrix:\n")
 #from https://stackoverflow.com/questions/35572000/how-can-i-plot-a-confusion-matrix
 confusion_matrix = confusion_matrix(y_true,y_pred,labels=classes)
@@ -429,7 +447,7 @@ df_cm = pd.DataFrame(confusion_matrix, index = [i for i in classes],
                   columns = [i for i in classes])
 plt.figure(figsize = (10,7))
 sn.heatmap(df_cm, annot=True)
-plt.show()'''
+plt.show()
 
 
 '''
